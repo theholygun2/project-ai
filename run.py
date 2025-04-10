@@ -1,6 +1,6 @@
 import uuid
 from graph import personal_assistant_graph
-from langchain_core.messages.tool import ToolMessage
+from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
 from util import _print_event
 
 thread_id = str(uuid.uuid4())
@@ -22,43 +22,63 @@ while True:
         break
 
     events = personal_assistant_graph.stream(
-        {"messages": {"user", user_input}}, config, stream_mode="values"
+        {"messages": [HumanMessage(content=user_input)]},
+        config,
+        stream_mode="values"
     )
 
     _printed = set()
-    print(events)
     for event in events:
         _print_event(event, _printed)
-    
+
+        if event.get("type") == "tool_result":
+            tool_call_id = None
+            tool_response = event.get("output", "No output returned")
+
+            if (
+                "messages" in event
+                and isinstance(event["messages"][-1], AIMessage)
+                and event["messages"][-1].tool_calls
+            ):
+                tool_call_id = event["messages"][-1].tool_calls[0].get("id")
+
+            if tool_call_id:
+                if isinstance(tool_response, (dict, list)):
+                    tool_response = str(tool_response)
+
+                followup = ToolMessage(
+                    tool_call_id=tool_call_id,
+                    content=tool_response or "No output returned"
+                )
+                result = personal_assistant_graph.stream(
+                    {"messages": [followup]},
+                    config,
+                    stream_mode="values"
+                )
+
+                for event in result:
+                    _print_event(event, _printed)
+
     snapshot = personal_assistant_graph.get_state(config)
+
     while snapshot.next:
         try:
             user_approval = input(
                 "Do you approve of the above action? Type 'y' to continue;"
-                "otherwise, explain your requested changes.\n\n"
+                " otherwise, explain your requested changes.\n\n"
             )
         except:
             user_approval = "y"
 
-        if user_approval.strip().lower == "y":
+        if user_approval.strip().lower() == "y":
             result = personal_assistant_graph.stream(
                 None,
                 config,
                 stream_mode="values"
             )
         else:
-            result = personal_assistant_graph.stream(
-                {
-                    "messages": [
-                        ToolMessage(
-                            tool_call_id=event["messages"][-1].tool_calls[0]["id"],
-                            content=f"API call denied by user. Reasoning: '{user_approval}. Continue assisting, accounting for the  "
-                        )
-                    ]
-                },
-                config,
-                stream_mode="values"
-            )
+            print("[INFO] Tool call not approved. Awaiting user follow-up.")
+            break
 
         for event in result:
             _print_event(event, _printed)

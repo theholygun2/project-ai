@@ -6,7 +6,7 @@ from assistant import assistant, sensitive_tool_names, sensitive_tools, safe_too
 from util import create_tool_node_with_fallback
 
 def route_tools(state:State):
-    next_node = tools_condition(State)
+    next_node = tools_condition(state)
     if next_node == END:
         return END
     ai_message = state["messages"][-1]
