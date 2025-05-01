@@ -74,12 +74,32 @@ def read_events(time_min: str, time_max: str) -> Dict[str, Any]:
 def update_event(event_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
     """
     Update an existing event in Google Calendar.
+
+    Args:
+        event_id (str): The unique identifier of the event to update.
+        updates (Dict[str, Any]): A dictionary of fields to update. Typically includes:
+            - 'start': {"dateTime": "<ISO format datetime>"}
+            - 'end': {"dateTime": "<ISO format datetime>"}
+            - optionally 'summary' or 'description'
+
+    Example:
+        update_event(
+            event_id="abc123",
+            updates={
+                "start": {"dateTime": "2025-05-01T10:00:00+07:00"},
+                "end": {"dateTime": "2025-05-01T11:00:00+07:00"}
+            }
+        )
+
+    Returns:
+        A dictionary with a message and a link to the updated event.
     """
     event = calendar_service.events().get(calendarId='primary', eventId=event_id).execute()
     for key, value in updates.items():
         event[key] = value
     updated_event = calendar_service.events().update(calendarId='primary', eventId=event_id, body=event).execute()
     return {"message": f"Event updated: {updated_event['htmlLink']}"}
+
 
 
 @tool

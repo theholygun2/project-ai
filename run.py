@@ -4,7 +4,7 @@ from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
 from util import _print_event
 
 thread_id = str(uuid.uuid4())
-print("THREAD ID", thread_id)
+print("THREAD ID:", thread_id)
 
 config = {
     "configurable": {
@@ -13,6 +13,8 @@ config = {
 }
 
 print("Welcome to the personal assistant. Type 'exit' to end the conversation.")
+
+event_lookup = {}  # Store recent events for user-friendly delete confirmations
 
 while True:
     user_input = input("You: ").strip()
@@ -34,6 +36,11 @@ while True:
         if event.get("type") == "tool_result":
             tool_call_id = None
             tool_response = event.get("output", "No output returned")
+
+            # Save events for later reference
+            if isinstance(tool_response, dict) and "events" in tool_response:
+                for ev in tool_response["events"]:
+                    event_lookup[ev["id"]] = ev  # Save by ID
 
             if (
                 "messages" in event
@@ -63,9 +70,20 @@ while True:
 
     while snapshot.next:
         try:
+            # Try to extract event_id from pending tool call
+            tool_call = snapshot.next.get("messages", [])[-1].tool_calls[0]
+            event_id = tool_call.get("args", {}).get("event_id")
+            if event_id and event_id in event_lookup:
+                ev = event_lookup[event_id]
+                summary = ev.get("summary", "No Title")
+                start = ev.get("start", "").replace("T", " ").replace("+07:00", "")
+                print(f"\n📌 You're about to delete this event:\n- **{summary}** on {start}")
+        except Exception:
+            pass  # No event to display
+
+        try:
             user_approval = input(
-                "Do you approve of the above action? Type 'y' to continue;"
-                " otherwise, explain your requested changes.\n\n"
+                "\n❓ Proceed with the above action? (y = yes, anything else = no)\n> "
             )
         except:
             user_approval = "y"
